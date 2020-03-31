@@ -112,7 +112,7 @@ class Runner:
             epoch (int or None): ``--epoch`` command argument.
             max_epochs (int): ``--max-epochs`` command argument.
             log_period (int): ``--log-period`` command argument.
-            device (str): ``--device`` command argument.
+            device (list): ``--device`` command argument.
         """
         # Restore checkpoint if exists or is forced
         epochs_list = self.experiment.checkpoints_get()
@@ -120,12 +120,12 @@ class Runner:
         if epoch:
             if epoch not in epochs_list:
                 raise ValueError('Epoch {} not found.'.format(epoch))
-            self.load_states(epoch, device)
+            self.load_states(epoch, device[0])
 
         # Start from the checkpoint epoch if exists. Otherwise it will start at 1. Add +1 so max_epochs is respected.
         for self.counters['epoch'] in range(self.counters['epoch'] + 1, max_epochs + 1):
             # Call self-implemented tasks which run before an epoch has finished
-            self.train_before_epoch_tasks(device)
+            self.train_before_epoch_tasks(device[0])
 
             # Run Train
             self.model.train()
@@ -133,12 +133,12 @@ class Runner:
             for self.counters['train_it'], it_data in \
                     enumerate(self.experiment.data.loaders['train'], start=self.counters['train_it'] + 1):
                 self.optimizer.zero_grad()
-                it_loss = self.train_step(it_data, device)
+                it_loss = self.train_step(it_data, device[0])
                 it_loss.backward()
                 self.optimizer.step()
                 e_train_losses.append(it_loss.item())
                 if self.counters['train_it'] % log_period == 0:
-                    self.train_iteration_log(e_train_losses, log_period, device)
+                    self.train_iteration_log(e_train_losses, log_period, device[0])
 
             # Run Validation
             self.model.eval()
@@ -146,17 +146,17 @@ class Runner:
             for self.counters['validation_it'], it_data in \
                     enumerate(self.experiment.data.loaders['validation'], start=self.counters['validation_it'] + 1):
                 with torch.no_grad():
-                    it_loss = self.train_step(it_data, device)
+                    it_loss = self.train_step(it_data, device[0])
                 e_validation_losses.append(it_loss.item())
                 if self.counters['validation_it'] % log_period == 0:
-                    self.validation_iteration_log(e_validation_losses, log_period, device)
+                    self.validation_iteration_log(e_validation_losses, log_period, device[0])
 
             # Log Train
-            self.train_epoch_log(e_train_losses, device)
-            self.validation_epoch_log(e_validation_losses, device)
+            self.train_epoch_log(e_train_losses, device[0])
+            self.validation_epoch_log(e_validation_losses, device[0])
 
             # Call self-implemented tasks which run after an epoch has finished
-            self.train_after_epoch_tasks(device)
+            self.train_after_epoch_tasks(device[0])
 
             # Save the checkpoint
             self.save_states()
@@ -289,7 +289,7 @@ class Runner:
 
         Args:
             epoch (int or None): ``--epoch`` command argument.
-            device (str): ``--device`` command argument.
+            device (list): ``--device`` command argument.
         """
         raise NotImplementedError
 
