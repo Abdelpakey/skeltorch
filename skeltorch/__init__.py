@@ -76,10 +76,10 @@ class Skeltorch:
         train_subparser.add_argument('--max-epochs', type=int, default=999, help='Maximum number of epochs to perform')
         train_subparser.add_argument('--log-period', type=int, default=100, help='Number of iterations between logs')
         train_subparser.add_argument('--num-workers', type=int, default=1, help='Number of DataLoader workers')
-        train_subparser.add_argument('--device', default='cpu', help='PyTorch-friendly device name')
+        train_subparser.add_argument('--device', nargs='+', default=None, help='PyTorch-friendly device name')
         test_subparser.add_argument('--epoch', type=int, required=True, help='Epoch from which run the test')
         test_subparser.add_argument('--num-workers', type=int, default=1, help='Number of DataLoader workers')
-        test_subparser.add_argument('--device', default='cpu', help='PyTorch-friendly device name')
+        test_subparser.add_argument('--device', nargs='+', default=None, help='PyTorch-friendly device name')
 
     def _init_default_commands(self):
         init_args = ['data_path', 'config_path', 'config_schema_path', 'seed']

@@ -1,6 +1,7 @@
+import logging
 import os
 import torch
-import logging
+import re
 
 
 class Execution:
@@ -48,6 +49,10 @@ class Execution:
             self.args['experiments_path'] = os.path.join(self.args['base_path'], 'experiments')
         if self.args['data_path'] is None:
             self.args['data_path'] = os.path.join(self.args['base_path'], 'data')
+        if 'device' in self.args and self.args['device'] is None:
+            self.args['device'] = ['cuda'] if torch.cuda.is_available() else ['cpu']
+        elif 'device' in self.args:
+            self.args['device'] = sorted(self.args['device'])
 
     def _validate(self):
         self._validate_main_args()
@@ -61,8 +66,19 @@ class Execution:
             raise ValueError('Experiments path does not exist.')
         if not os.path.exists(self.args['data_path']):
             raise ValueError('Data path does not exist.')
-        if 'device' in self.args and self.args['device'] == 'cuda' and not torch.cuda.is_available():
-            raise ValueError('CUDA requested but not available.')
+        if 'device' in self.args:
+            for device in self.args['device']:
+                if not re.match(r'(^cpu$|^cuda$|^cuda:\d+$)', device):
+                    raise ValueError('Device {} is not valid.'.format(device))
+                if re.match(r'^cuda:\d+$', device) and torch.device(device).index > torch.cuda.device_count():
+                    raise ValueError('Device {} is not available.'.format(device))
+            if len(self.args['device']) != len(set(self.args['device'])):
+                raise ValueError('Device argument not valid. Duplicated device found.')
+            if 'cpu' in self.args['device'] and len(self.args['device']) > 1:
+                raise ValueError('Invalid choice of devices. You can not mix CPU and GPU devices.')
+            if 'cpu' not in self.args['device'] and len(self.args['device']) > torch.cuda.device_count():
+                raise ValueError('Invalid choice of devices. You requested {} GPUs but only {} is/are available.'
+                                 .format(len(self.args['device']), torch.cuda.device_count()))
 
     def _validate_init_args(self):
         if os.path.exists(os.path.join(self.args['experiments_path'], self.args['experiment_name'])):

@@ -1,6 +1,7 @@
 import numpy as np
 import random
 import torch
+import torch.nn
 import torch.optim
 import torch.utils.data
 
@@ -42,13 +43,18 @@ class Runner:
         Args:
             experiment (skeltorch.Experiment): Experiment object.
             logger (logging.Logger): Logger object.
-            device (str): ``--device`` command argument.
+            device (list): ``--device`` command argument.
         """
         self.experiment = experiment
         self.logger = logger
-        self.init_model(device)
-        self.init_optimizer(device)
-        self.init_others(device)
+        self.init_model(device[0])
+        self.init_optimizer(device[0])
+        self.init_others(device[0])
+        if len(device) > 1:
+            self.model = torch.nn.DataParallel(
+                self.model,
+                device_ids=[torch.device(device_str).index for device_str in device]
+            )
 
     def init_model(self, device):
         """Initializes the model used in the project.
@@ -57,7 +63,7 @@ class Runner:
         to the proper device.
 
         Args:
-            device (str): ``--device`` command argument.
+            device (list): ``--device`` command argument.
         """
         raise NotImplementedError
 
@@ -295,7 +301,10 @@ class Runner:
             device (str): ``--device`` command argument.
         """
         checkpoint_data = self.experiment.checkpoint_load(epoch, device)
-        self.model.load_state_dict(checkpoint_data['model'])
+        if isinstance(self.model, torch.nn.DataParallel):
+            self.model.module.load_state_dict(checkpoint_data['model'])
+        else:
+            self.model.load_state_dict(checkpoint_data['model'])
         self.optimizer.load_state_dict(checkpoint_data['optimizer'])
         random.setstate(checkpoint_data['random_states'][0])
         np.random.set_state(checkpoint_data['random_states'][1])
@@ -322,7 +331,10 @@ class Runner:
     def save_states(self):
         """Saves the states inside a checkpoint associated with ``epoch``."""
         checkpoint_data = dict()
-        checkpoint_data['model'] = self.model.state_dict()
+        if isinstance(self.model, torch.nn.DataParallel):
+            checkpoint_data['model'] = self.model.module.state_dict()
+        else:
+            checkpoint_data['model'] = self.model.state_dict()
         checkpoint_data['optimizer'] = self.optimizer.state_dict()
         checkpoint_data['random_states'] = (
             random.getstate(), np.random.get_state(), torch.get_rng_state(), torch.cuda.get_rng_state() if
