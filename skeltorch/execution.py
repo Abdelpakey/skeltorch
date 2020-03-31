@@ -70,7 +70,7 @@ class Execution:
             for device in self.args['device']:
                 if not re.match(r'(^cpu$|^cuda$|^cuda:\d+$)', device):
                     raise ValueError('Device {} is not valid.'.format(device))
-                if re.match(r'^cuda:\d+$', device) and torch.device(device).index >= torch.cuda.device_count() - 1:
+                if re.match(r'^cuda:\d+$', device) and torch.device(device).index > torch.cuda.device_count() - 1:
                     raise ValueError('Device {} is not available.'.format(device))
             if len(self.args['device']) != len(set(self.args['device'])):
                 raise ValueError('Device argument not valid. Duplicated device found.')
