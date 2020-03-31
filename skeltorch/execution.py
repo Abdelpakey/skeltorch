@@ -51,6 +51,7 @@ class Execution:
             self.args['data_path'] = os.path.join(self.args['base_path'], 'data')
         if 'device' in self.args and self.args['device'] is None:
             self.args['device'] = ['cuda'] if torch.cuda.is_available() else ['cpu']
+            self.logger.info('Argument --device not specified. Set "{}".'.format(self.args['device']))
         elif 'device' in self.args:
             self.args['device'] = sorted(self.args['device'])
 
@@ -76,6 +77,10 @@ class Execution:
                 raise ValueError('Device argument not valid. Duplicated device found.')
             if 'cpu' in self.args['device'] and len(self.args['device']) > 1:
                 raise ValueError('Invalid choice of devices. You can not mix CPU and GPU devices.')
+            if 'cuda' in self.args['device'] and len(self.args['device']) > 1:
+                raise ValueError(
+                    'Invalid choice of devices. You must specify device indexes if multiple GPUs are required.'
+                )
             if 'cpu' not in self.args['device'] and len(self.args['device']) > torch.cuda.device_count():
                 raise ValueError('Invalid choice of devices. You requested {} GPUs but only {} is/are available.'
                                  .format(len(self.args['device']), torch.cuda.device_count()))
