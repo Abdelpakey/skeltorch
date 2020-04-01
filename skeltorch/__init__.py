@@ -67,6 +67,7 @@ class Skeltorch:
         init_subparser = self.create_parser('init')
         train_subparser = self.create_parser('train')
         test_subparser = self.create_parser('test')
+        tensorboard_subparser = self.create_parser('tensorboard')
         init_subparser.add_argument('--config-path', type=str, required=True, help='Configuration file path')
         init_subparser.add_argument('--config-schema-path', type=str, default=None,
                                     help='Configuration schema file path')
@@ -76,18 +77,22 @@ class Skeltorch:
         train_subparser.add_argument('--max-epochs', type=int, default=999, help='Maximum number of epochs to perform')
         train_subparser.add_argument('--log-period', type=int, default=100, help='Number of iterations between logs')
         train_subparser.add_argument('--num-workers', type=int, default=1, help='Number of DataLoader workers')
-        train_subparser.add_argument('--device', nargs='+', default=None, help='PyTorch-friendly device name')
+        train_subparser.add_argument('--devices', nargs='+', default=None, help='PyTorch-friendly device names')
         test_subparser.add_argument('--epoch', type=int, required=True, help='Epoch from which run the test')
         test_subparser.add_argument('--num-workers', type=int, default=1, help='Number of DataLoader workers')
-        test_subparser.add_argument('--device', nargs='+', default=None, help='PyTorch-friendly device name')
+        test_subparser.add_argument('--devices', nargs='+', default=None, help='PyTorch-friendly device names')
+        tensorboard_subparser.add_argument('--port', default=6006, help='Port where to run TensorBoard')
+        tensorboard_subparser.add_argument('--dev', action='store_true', help='Use TensorBoard.dev')
 
     def _init_default_commands(self):
         init_args = ['data_path', 'config_path', 'config_schema_path', 'seed']
-        train_args = ['epoch', 'max_epochs', 'log_period', 'device']
-        test_args = ['epoch', 'device']
+        train_args = ['epoch', 'max_epochs', 'log_period', 'devices']
+        test_args = ['epoch', 'devices']
+        tensorboard_args = ['port', 'dev']
         self.create_command(self._subparsers['init'], self.experiment.create, init_args)
         self.create_command(self._subparsers['train'], self.runner.train, train_args)
         self.create_command(self._subparsers['test'], self.runner.test, test_args)
+        self.create_command(self._subparsers['tensorboard'], self.experiment.run_tensorboard, tensorboard_args)
 
     def get_parser(self, command_name):
         """Gets an already-created parser.
@@ -142,7 +147,8 @@ class Skeltorch:
                 num_workers=self.execution.args['num_workers'] if 'num_workers' in self.execution.args else 1,
                 verbose=self.execution.args['verbose']
             )
-            self.runner.init(self.experiment, self.logger, self.execution.args['device'])
+        if self.execution.command not in ['init', 'tensorboard']:
+            self.runner.init(self.experiment, self.logger, self.execution.args['devices'])
         command_handler, command_args_keys = self._commandHandlers[self.execution.command]
         commands_args = {command_arg_key: self.execution.args[command_arg_key] for command_arg_key in command_args_keys}
         command_handler(**commands_args)

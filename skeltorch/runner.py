@@ -37,23 +37,23 @@ class Runner:
         """``skeltorch.Runner`` constructor."""
         pass
 
-    def init(self, experiment, logger, device):
+    def init(self, experiment, logger, devices):
         """Lazy-loading of ``skeltorch.Runner`` attributes.
 
         Args:
             experiment (skeltorch.Experiment): Experiment object.
             logger (logging.Logger): Logger object.
-            device (list): ``--device`` command argument.
+            devices (list): ``--device`` command argument.
         """
         self.experiment = experiment
         self.logger = logger
-        self.init_model(device[0])
-        self.init_optimizer(device[0])
-        self.init_others(device[0])
-        if len(device) > 1:
+        self.init_model(devices[0])
+        self.init_optimizer(devices[0])
+        self.init_others(devices[0])
+        if len(devices) > 1:
             self.model = torch.nn.DataParallel(
                 self.model,
-                device_ids=[torch.device(device_str).index for device_str in device]
+                device_ids=[torch.device(device).index for device in devices]
             )
 
     def init_model(self, device):
@@ -63,7 +63,7 @@ class Runner:
         to the proper device.
 
         Args:
-            device (list): ``--device`` command argument.
+            device (str): first ordered element of ``--devices`` command argument.
         """
         raise NotImplementedError
 
@@ -74,7 +74,7 @@ class Runner:
         the optimizer to the proper device, if required.
 
         Args:
-            device (str): ``--device`` command argument.
+            device (str): first ordered element of ``--devices`` command argument.
         """
         raise NotImplementedError
 
@@ -85,10 +85,10 @@ class Runner:
         move the objects to the proper device, if required.
 
         Args:
-            device (str): ``--device`` command argument.
+            device (str): first ordered element of ``--devices`` command argument.
         """
 
-    def train(self, epoch, max_epochs, log_period, device):
+    def train(self, epoch, max_epochs, log_period, devices):
         """Runs the ``train`` pipeline.
 
         Implements a highly-customizable training/validation pipeline. In detail, the pipeline:
@@ -112,7 +112,7 @@ class Runner:
             epoch (int or None): ``--epoch`` command argument.
             max_epochs (int): ``--max-epochs`` command argument.
             log_period (int): ``--log-period`` command argument.
-            device (list): ``--device`` command argument.
+            devices (list): ``--devices`` command argument.
         """
         # Restore checkpoint if exists or is forced
         epochs_list = self.experiment.checkpoints_get()
@@ -120,12 +120,12 @@ class Runner:
         if epoch:
             if epoch not in epochs_list:
                 raise ValueError('Epoch {} not found.'.format(epoch))
-            self.load_states(epoch, device[0])
+            self.load_states(epoch, devices[0])
 
         # Start from the checkpoint epoch if exists. Otherwise it will start at 1. Add +1 so max_epochs is respected.
         for self.counters['epoch'] in range(self.counters['epoch'] + 1, max_epochs + 1):
             # Call self-implemented tasks which run before an epoch has finished
-            self.train_before_epoch_tasks(device[0])
+            self.train_before_epoch_tasks(devices[0])
 
             # Run Train
             self.model.train()
@@ -133,12 +133,12 @@ class Runner:
             for self.counters['train_it'], it_data in \
                     enumerate(self.experiment.data.loaders['train'], start=self.counters['train_it'] + 1):
                 self.optimizer.zero_grad()
-                it_loss = self.train_step(it_data, device[0])
+                it_loss = self.train_step(it_data, devices[0])
                 it_loss.backward()
                 self.optimizer.step()
                 e_train_losses.append(it_loss.item())
                 if self.counters['train_it'] % log_period == 0:
-                    self.train_iteration_log(e_train_losses, log_period, device[0])
+                    self.train_iteration_log(e_train_losses, log_period, devices[0])
 
             # Run Validation
             self.model.eval()
@@ -146,17 +146,17 @@ class Runner:
             for self.counters['validation_it'], it_data in \
                     enumerate(self.experiment.data.loaders['validation'], start=self.counters['validation_it'] + 1):
                 with torch.no_grad():
-                    it_loss = self.train_step(it_data, device[0])
+                    it_loss = self.train_step(it_data, devices[0])
                 e_validation_losses.append(it_loss.item())
                 if self.counters['validation_it'] % log_period == 0:
-                    self.validation_iteration_log(e_validation_losses, log_period, device[0])
+                    self.validation_iteration_log(e_validation_losses, log_period, devices[0])
 
             # Log Train
-            self.train_epoch_log(e_train_losses, device[0])
-            self.validation_epoch_log(e_validation_losses, device[0])
+            self.train_epoch_log(e_train_losses, devices[0])
+            self.validation_epoch_log(e_validation_losses, devices[0])
 
             # Call self-implemented tasks which run after an epoch has finished
-            self.train_after_epoch_tasks(device[0])
+            self.train_after_epoch_tasks(devices[0])
 
             # Save the checkpoint
             self.save_states()
@@ -175,7 +175,7 @@ class Runner:
 
         Args:
             it_data (any): output of the loader for the current iteration.
-            device (str): ``--device`` command argument.
+            device (str): first ordered element of ``--devices`` command argument.
 
         Returns:
             loss (float): measured value the loss.
@@ -188,7 +188,7 @@ class Runner:
         By default, it logs an initializing message.
 
         Args:
-            device (str): ``--device`` command argument.
+            device (str): first ordered element of ``--devices`` command argument.
         """
         self.logger.info('Initializing Epoch {}'.format(self.counters['epoch']))
 
@@ -201,7 +201,7 @@ class Runner:
         Args:
             e_train_losses (list): List containing all train losses of the epoch.
             log_period (int): ``--log-period`` command argument.
-            device (str): ``--device`` command argument.
+            device (str): first ordered element of ``--devices`` command argument.
         """
         self.losses_it['train'][self.counters['train_it']] = np.mean(e_train_losses[-log_period:])
         self.logger.info('Train Iteration {} - Loss {:.3f}'.format(
@@ -218,7 +218,7 @@ class Runner:
 
         Args:
             e_train_losses (list): List containing all train losses of the epoch.
-            device (str): ``--device`` command argument.
+            device (str): first ordered element of ``--devices`` command argument.
         """
         self.losses_epoch['train'][self.counters['epoch']] = np.mean(e_train_losses)
         self.experiment.tbx.add_scalar(
@@ -234,7 +234,7 @@ class Runner:
         Args:
             e_validation_losses (list): List containing all validation losses of the epoch.
             log_period (int): ``--log-period`` command argument.
-            device (str): ``--device`` command argument.
+            device (str): first ordered element of ``--devices`` command argument.
         """
         self.losses_it['validation'][self.counters['validation_it']] = np.mean(e_validation_losses[-log_period:])
         self.logger.info('Validation Iteration {} - Loss {:.3f}'.format(
@@ -252,7 +252,7 @@ class Runner:
 
         Args:
             e_validation_losses (list): List containing all validation losses of the epoch.
-            device (str): ``--device`` command argument.
+            device (str): first ordered element of ``--devices`` command argument.
         """
         self.losses_epoch['validation'][self.counters['epoch']] = np.mean(e_validation_losses)
         self.experiment.tbx.add_scalar(
@@ -265,7 +265,7 @@ class Runner:
         By default, it logs a summary of the epoch using the logger.
 
         Args:
-            device (str): ``--device`` command argument.
+            device (str): first ordered element of ``--devices`` command argument.
         """
         self.logger.info('Epoch: {} | Average Training Loss: {:.3f} | Average Validation Loss: {:.3f}'.format(
             self.counters['epoch'],
@@ -284,12 +284,12 @@ class Runner:
         self.logger.info('Early stopping not implemented.')
         return False
 
-    def test(self, epoch, device):
+    def test(self, epoch, devices):
         """Runs the ``test`` pipeline.
 
         Args:
             epoch (int or None): ``--epoch`` command argument.
-            device (list): ``--device`` command argument.
+            devices (list): ``--devices`` command argument.
         """
         raise NotImplementedError
 
@@ -312,12 +312,8 @@ class Runner:
         if torch.cuda.is_available() and checkpoint_data['random_states'][3] is not None:
             torch.cuda.set_rng_state(checkpoint_data['random_states'][3].cpu())
         self.counters = checkpoint_data['counters']
-        # Compatibility purposes until next release
-        if 'losses' in checkpoint_data:
-            self.losses_epoch = checkpoint_data['losses']
-        else:
-            self.losses_epoch = checkpoint_data['losses_epoch']
-            self.losses_it = checkpoint_data['losses_it']
+        self.losses_epoch = checkpoint_data['losses_epoch']
+        self.losses_it = checkpoint_data['losses_it']
         self.load_states_others(checkpoint_data)
 
     def load_states_others(self, checkpoint_data):

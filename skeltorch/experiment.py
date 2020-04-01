@@ -148,3 +148,17 @@ class Experiment:
                 checkpoint_file:
             torch.save(checkpoint_data, checkpoint_file)
             self.logger.info('Checkpoint of epoch {} saved.'.format(epoch))
+
+    def run_tensorboard(self, port, dev):
+        """Runs TensorBoard using experiment files.
+
+        Args:
+            port (int): Port where to run TensorBoard.
+            dev (bool): Whether to use TensorBoard.dev or not.
+        """
+        if dev:
+            os.system(
+                'tensorboard dev upload --logdir {} --name "{}"'.format(self.paths['tensorboard'], self.experiment_name)
+            )
+        else:
+            os.system('tensorboard --port {} --logdir {}'.format(port, self.paths['tensorboard']))
